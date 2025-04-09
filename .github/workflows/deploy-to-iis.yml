@@ -1,0 +1,61 @@
+name: Build and Deploy ASP.NET Core to IIS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build the app
+        run: dotnet build --configuration Release
+
+      - name: Run tests
+        run: dotnet test --no-build
+
+      - name: Publish the app
+        run: dotnet publish -c Release -o ./publish
+
+      - name: Upload published artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: published-app
+          path: ./publish
+
+  deploy:
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - name: Download published app
+        uses: actions/download-artifact@v3
+        with:
+          name: published-app
+          path: ./publish
+
+      - name: Deploy to IIS using Web Deploy
+        shell: powershell
+        run: |
+          & "C:\Program Files\IIS\Microsoft Web Deploy V3\msdeploy.exe" `
+            -verb:sync `
+            -source:contentPath="publish" `
+            -dest:contentPath="${{ secrets.IIS_SITE_NAME }}", `
+              computerName="${{ secrets.IIS_SERVER }}", `
+              userName="${{ secrets.IIS_USERNAME }}", `
+              password="${{ secrets.IIS_PASSWORD }}", `
+              authType="Basic" `
+            -allowUntrusted
